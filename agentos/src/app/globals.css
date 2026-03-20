@@ -1,0 +1,178 @@
+@import "@heroui/styles";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  /* Font tokens */
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  /* Color tokens for Tailwind utility classes (bg-card, text-primary, etc.) */
+  --color-card: var(--t-card);
+  --color-card-foreground: var(--t-card-foreground);
+  --color-popover: var(--t-popover);
+  --color-popover-foreground: var(--t-popover-foreground);
+  --color-primary: var(--t-primary);
+  --color-primary-foreground: var(--t-primary-foreground);
+  --color-secondary: var(--t-secondary);
+  --color-secondary-foreground: var(--t-secondary-foreground);
+  --color-muted: var(--t-muted);
+  --color-muted-foreground: var(--t-muted-foreground);
+  --color-accent: var(--t-accent);
+  --color-accent-foreground: var(--t-accent-foreground);
+  --color-destructive: var(--t-destructive);
+  --color-input: var(--t-input);
+  --color-ring: var(--t-ring);
+  --color-border: var(--t-border);
+
+  /* Chart colors */
+  --color-chart-1: var(--t-chart-1);
+  --color-chart-2: var(--t-chart-2);
+  --color-chart-3: var(--t-chart-3);
+  --color-chart-4: var(--t-chart-4);
+  --color-chart-5: var(--t-chart-5);
+
+  /* Sidebar tokens */
+  --color-sidebar: var(--t-sidebar);
+  --color-sidebar-foreground: var(--t-sidebar-foreground);
+  --color-sidebar-primary: var(--t-sidebar-primary);
+  --color-sidebar-primary-foreground: var(--t-sidebar-primary-foreground);
+  --color-sidebar-accent: var(--t-sidebar-accent);
+  --color-sidebar-accent-foreground: var(--t-sidebar-accent-foreground);
+  --color-sidebar-border: var(--t-sidebar-border);
+  --color-sidebar-ring: var(--t-sidebar-ring);
+
+  /* Radius scale */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* HeroUI base tokens */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --surface: oklch(1 0 0);
+  --surface-foreground: oklch(0.145 0 0);
+  --overlay: oklch(1 0 0);
+  --overlay-foreground: oklch(0.145 0 0);
+  --accent: oklch(0.205 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --default: oklch(0.97 0 0);
+  --default-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.556 0 0);
+  --danger: oklch(0.577 0.245 27.325);
+  --danger-foreground: oklch(0.985 0 0);
+  --border: oklch(0.922 0 0);
+  --separator: oklch(0.922 0 0);
+  --focus: oklch(0.708 0 0);
+  --field-background: oklch(1 0 0);
+  --field-foreground: oklch(0.145 0 0);
+  --field-border: oklch(0.922 0 0);
+  --radius: 0.625rem;
+
+  /* Tailwind color tokens (referenced by @theme inline via --t-* prefix to avoid conflicts with HeroUI) */
+  --t-card: oklch(1 0 0);
+  --t-card-foreground: oklch(0.145 0 0);
+  --t-popover: oklch(1 0 0);
+  --t-popover-foreground: oklch(0.145 0 0);
+  --t-primary: oklch(0.49 0.24 264);
+  --t-primary-foreground: oklch(0.985 0 0);
+  --t-secondary: oklch(0.97 0 0);
+  --t-secondary-foreground: oklch(0.205 0 0);
+  --t-muted: oklch(0.97 0 0);
+  --t-muted-foreground: oklch(0.556 0 0);
+  --t-accent: oklch(0.97 0 0);
+  --t-accent-foreground: oklch(0.205 0 0);
+  --t-destructive: oklch(0.577 0.245 27.325);
+  --t-input: oklch(0.922 0 0);
+  --t-ring: oklch(0.55 0.20 264);
+  --t-border: oklch(0.922 0 0);
+
+  /* Chart colors */
+  --t-chart-1: oklch(0.55 0.24 264);
+  --t-chart-2: oklch(0.75 0.15 192);
+  --t-chart-3: oklch(0.62 0.20 270);
+  --t-chart-4: oklch(0.65 0.14 200);
+  --t-chart-5: oklch(0.45 0.20 280);
+
+  /* Sidebar */
+  --t-sidebar: oklch(0.16 0.02 280);
+  --t-sidebar-foreground: oklch(0.75 0 0);
+  --t-sidebar-primary: oklch(0.55 0.22 264);
+  --t-sidebar-primary-foreground: oklch(0.985 0 0);
+  --t-sidebar-accent: oklch(0.22 0.04 270);
+  --t-sidebar-accent-foreground: oklch(0.93 0 0);
+  --t-sidebar-border: oklch(0.28 0.03 270);
+  --t-sidebar-ring: oklch(0.55 0.20 264);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --surface: oklch(0.205 0 0);
+  --surface-foreground: oklch(0.985 0 0);
+  --overlay: oklch(0.205 0 0);
+  --overlay-foreground: oklch(0.985 0 0);
+  --accent: oklch(0.922 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --default: oklch(0.269 0 0);
+  --default-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.708 0 0);
+  --danger: oklch(0.704 0.191 22.216);
+  --danger-foreground: oklch(0.985 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --separator: oklch(1 0 0 / 10%);
+  --focus: oklch(0.556 0 0);
+  --field-background: oklch(0.205 0 0);
+  --field-foreground: oklch(0.985 0 0);
+  --field-border: oklch(1 0 0 / 15%);
+
+  --t-card: oklch(0.205 0 0);
+  --t-card-foreground: oklch(0.985 0 0);
+  --t-popover: oklch(0.205 0 0);
+  --t-popover-foreground: oklch(0.985 0 0);
+  --t-primary: oklch(0.60 0.22 264);
+  --t-primary-foreground: oklch(0.985 0 0);
+  --t-secondary: oklch(0.269 0 0);
+  --t-secondary-foreground: oklch(0.985 0 0);
+  --t-muted: oklch(0.269 0 0);
+  --t-muted-foreground: oklch(0.708 0 0);
+  --t-accent: oklch(0.269 0 0);
+  --t-accent-foreground: oklch(0.985 0 0);
+  --t-destructive: oklch(0.704 0.191 22.216);
+  --t-input: oklch(1 0 0 / 15%);
+  --t-ring: oklch(0.556 0 0);
+  --t-border: oklch(1 0 0 / 10%);
+
+  --t-chart-1: oklch(0.55 0.24 264);
+  --t-chart-2: oklch(0.75 0.15 192);
+  --t-chart-3: oklch(0.62 0.20 270);
+  --t-chart-4: oklch(0.65 0.14 200);
+  --t-chart-5: oklch(0.45 0.20 280);
+
+  --t-sidebar: oklch(0.16 0.02 280);
+  --t-sidebar-foreground: oklch(0.85 0 0);
+  --t-sidebar-primary: oklch(0.60 0.22 264);
+  --t-sidebar-primary-foreground: oklch(0.985 0 0);
+  --t-sidebar-accent: oklch(0.22 0.04 270);
+  --t-sidebar-accent-foreground: oklch(0.93 0 0);
+  --t-sidebar-border: oklch(0.28 0.03 270);
+  --t-sidebar-ring: oklch(0.55 0.20 264);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conversation Reviewer</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; height: 100vh; background: #f5f5f5; color: #222; }
+
+/* Sidebar */
+#sidebar { width: 360px; min-width: 360px; background: #fff; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
+#filters { padding: 12px; border-bottom: 1px solid #eee; display: flex; flex-direction: column; gap: 8px; }
+#filters input, #filters select { padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; }
+#filter-row { display: flex; gap: 6px; flex-wrap: wrap; }
+#filter-row select { flex: 1; min-width: 0; }
+#conv-list { flex: 1; overflow-y: auto; }
+.conv-item { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: background 0.1s; }
+.conv-item:hover { background: #f8f8ff; }
+.conv-item.active { background: #e8ecff; border-left: 3px solid #4a6cf7; }
+.conv-item-id { font-weight: 600; font-size: 13px; }
+.conv-item-meta { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
+#sidebar-count { padding: 6px 12px; font-size: 12px; color: #888; border-bottom: 1px solid #eee; }
+
+/* Badges */
+.badge { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+.badge-resolved { background: #d4edda; color: #155724; }
+.badge-escalated { background: #fff3cd; color: #856404; }
+.badge-escalated_and_resolved { background: #cce5ff; color: #004085; }
+.badge-unresolved { background: #f8d7da; color: #721c24; }
+.badge-abandoned { background: #e2e3e5; color: #383d41; }
+.badge-category { background: #e9ecef; color: #495057; }
+.badge-tier-vip { background: #f3e5f5; color: #7b1fa2; }
+.badge-tier-premium { background: #fff8e1; color: #f57f17; }
+.badge-tier-standard { background: #f5f5f5; color: #757575; }
+
+/* Detail Panel */
+#detail { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+#detail-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 18px; }
+#detail-header { padding: 16px 20px; background: #fff; border-bottom: 1px solid #ddd; }
+#detail-header h2 { font-size: 16px; margin-bottom: 6px; }
+#meta-bar { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; color: #555; }
+#meta-bar span { display: inline-flex; align-items: center; gap: 4px; }
+#transcript { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+
+/* Messages */
+.msg { max-width: 70%; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.5; position: relative; }
+.msg-customer { align-self: flex-start; background: #e9ecef; border-bottom-left-radius: 4px; }
+.msg-bot { align-self: flex-end; background: #4a6cf7; color: #fff; border-bottom-right-radius: 4px; }
+.msg-human_agent { align-self: flex-end; background: #28a745; color: #fff; border-bottom-right-radius: 4px; }
+.msg-system { align-self: center; background: transparent; color: #888; font-style: italic; font-size: 13px; text-align: center; }
+.msg-role { font-size: 11px; font-weight: 600; margin-bottom: 2px; opacity: 0.7; }
+.msg-time { font-size: 10px; opacity: 0.5; margin-top: 4px; }
+.msg-note { font-size: 11px; font-style: italic; color: #999; margin-top: 4px; }
+.msg-bot .msg-note { color: rgba(255,255,255,0.6); }
+.msg-human_agent .msg-note { color: rgba(255,255,255,0.6); }
+
+/* Tool calls */
+.tool-calls { margin-top: 6px; }
+.tool-toggle { font-size: 11px; cursor: pointer; opacity: 0.7; background: none; border: none; color: inherit; text-decoration: underline; padding: 0; }
+.tool-detail { display: none; margin-top: 4px; background: rgba(0,0,0,0.1); border-radius: 6px; padding: 8px; font-size: 11px; font-family: monospace; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; }
+.tool-detail.open { display: block; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div id="filters">
+    <input type="text" id="search" placeholder="Search by ID or keyword...">
+    <div id="filter-row">
+      <select id="f-outcome"><option value="">All outcomes</option></select>
+      <select id="f-category"><option value="">All categories</option></select>
+      <select id="f-tier"><option value="">All tiers</option></select>
+      <select id="f-escalated"><option value="">Escalated?</option><option value="yes">Yes</option><option value="no">No</option></select>
+    </div>
+  </div>
+  <div id="sidebar-count"></div>
+  <div id="conv-list"></div>
+</div>
+
+<div id="detail">
+  <div id="detail-empty">Select a conversation</div>
+</div>
+
+<script>
+let conversations = [];
+let selected = null;
+
+async function init() {
+  const res = await fetch('/api/conversations');
+  conversations = await res.json();
+  populateFilters();
+  renderList();
+}
+
+function populateFilters() {
+  const outcomes = [...new Set(conversations.map(c => c.outcome))].sort();
+  const categories = [...new Set(conversations.map(c => c.issue_category))].sort();
+  const tiers = [...new Set(conversations.map(c => c.customer_tier))].sort();
+  const addOpts = (sel, vals) => vals.forEach(v => {
+    const o = document.createElement('option'); o.value = v; o.textContent = v.replace(/_/g, ' '); sel.appendChild(o);
+  });
+  addOpts(document.getElementById('f-outcome'), outcomes);
+  addOpts(document.getElementById('f-category'), categories);
+  addOpts(document.getElementById('f-tier'), tiers);
+}
+
+function getFiltered() {
+  const search = document.getElementById('search').value.toLowerCase();
+  const outcome = document.getElementById('f-outcome').value;
+  const category = document.getElementById('f-category').value;
+  const tier = document.getElementById('f-tier').value;
+  const esc = document.getElementById('f-escalated').value;
+  return conversations.filter(c => {
+    if (search && !c.conversation_id.toLowerCase().includes(search) && !c.issue_category.toLowerCase().includes(search) && !c.outcome.toLowerCase().includes(search)) return false;
+    if (outcome && c.outcome !== outcome) return false;
+    if (category && c.issue_category !== category) return false;
+    if (tier && c.customer_tier !== tier) return false;
+    if (esc === 'yes' && !c.was_escalated) return false;
+    if (esc === 'no' && c.was_escalated) return false;
+    return true;
+  });
+}
+
+function renderList() {
+  const filtered = getFiltered();
+  document.getElementById('sidebar-count').textContent = `${filtered.length} conversations`;
+  const list = document.getElementById('conv-list');
+  list.innerHTML = filtered.map(c => `
+    <div class="conv-item ${selected === c.conversation_id ? 'active' : ''}" data-id="${c.conversation_id}">
+      <div class="conv-item-id">${c.conversation_id}</div>
+      <div class="conv-item-meta">
+        <span class="badge ${outcomeBadgeClass(c.outcome)}">${c.outcome.replace(/_/g, ' ')}</span>
+        <span class="badge badge-category">${c.issue_category.replace(/_/g, ' ')}</span>
+        <span class="badge badge-tier-${c.customer_tier}">${c.customer_tier}</span>
+      </div>
+    </div>
+  `).join('');
+  list.querySelectorAll('.conv-item').forEach(el => el.addEventListener('click', () => selectConv(el.dataset.id)));
+}
+
+function outcomeBadgeClass(outcome) {
+  if (outcome === 'resolved_by_bot' || outcome === 'resolved_by_human') return 'badge-resolved';
+  if (outcome === 'escalated_and_resolved') return 'badge-escalated_and_resolved';
+  if (outcome === 'escalated_unresolved') return 'badge-escalated';
+  if (outcome === 'unresolved') return 'badge-unresolved';
+  if (outcome === 'abandoned') return 'badge-abandoned';
+  return 'badge-category';
+}
+
+async function selectConv(id) {
+  selected = id;
+  renderList();
+  const res = await fetch(`/api/conversations/${id}`);
+  const c = await res.json();
+  renderDetail(c);
+}
+
+function formatTime(seconds) {
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return s ? `${m}m ${s}s` : `${m}m`;
+}
+
+function stars(n) { return '<span style="color:#f5a623">' + '&#9733;'.repeat(n) + '</span>' + '<span style="color:#ddd">' + '&#9733;'.repeat(5 - n) + '</span>'; }
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderDetail(c) {
+  const detail = document.getElementById('detail');
+  const escalatedInfo = c.was_escalated ? `Yes (${escapeHtml(c.escalation_trigger)}, turn ${c.escalation_turn})` : 'No';
+  detail.innerHTML = `
+    <div id="detail-header">
+      <h2>${c.conversation_id} &mdash; ${c.company}</h2>
+      <div id="meta-bar">
+        <span><span class="badge ${outcomeBadgeClass(c.outcome)}">${c.outcome.replace(/_/g,' ')}</span></span>
+        <span><b>Category:</b> ${c.issue_category.replace(/_/g,' ')} / ${(c.issue_subcategory||'').replace(/_/g,' ')}</span>
+        <span><b>Complexity:</b> ${c.complexity}</span>
+        <span><b>Tier:</b> ${c.customer_tier}</span>
+        <span><b>Sentiment:</b> ${c.customer_sentiment_start} &rarr; ${c.customer_sentiment_end}</span>
+        <span><b>Satisfaction:</b> ${stars(c.satisfaction_score)}</span>
+        <span><b>Escalated:</b> ${escalatedInfo}</span>
+      </div>
+      <div style="margin-top:8px;font-size:13px;color:#666;">${escapeHtml(c.resolution_detail)}</div>
+    </div>
+    <div id="transcript">
+      ${c.turns.map(renderTurn).join('')}
+    </div>
+  `;
+  // Wire up tool toggles
+  detail.querySelectorAll('.tool-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const td = btn.nextElementSibling;
+      td.classList.toggle('open');
+      btn.textContent = td.classList.contains('open') ? 'Hide tools' : 'Show tools';
+    });
+  });
+}
+
+function renderTurn(t) {
+  const roleLabel = {customer:'Customer', bot:'Bot', human_agent:'Agent', system:'System'}[t.role] || t.role;
+  let toolHtml = '';
+  if (t.tool_calls && t.tool_calls.length > 0) {
+    const toolLines = t.tool_calls.map(tc =>
+      `${tc.tool}(${JSON.stringify(tc.input, null, 1)})\n=> ${JSON.stringify(tc.output, null, 1)}`
+    ).join('\n\n');
+    toolHtml = `<div class="tool-calls"><button class="tool-toggle">Show tools</button><div class="tool-detail">${escapeHtml(toolLines)}</div></div>`;
+  }
+  let noteHtml = t.internal_note ? `<div class="msg-note">${escapeHtml(t.internal_note)}</div>` : '';
+  return `
+    <div class="msg msg-${t.role}">
+      <div class="msg-role">${roleLabel}</div>
+      <div>${escapeHtml(t.message)}</div>
+      ${toolHtml}
+      ${noteHtml}
+      <div class="msg-time">${formatTime(t.timestamp_offset_seconds)}</div>
+    </div>
+  `;
+}
+
+// Event listeners for filters
+document.getElementById('search').addEventListener('input', renderList);
+document.getElementById('f-outcome').addEventListener('change', renderList);
+document.getElementById('f-category').addEventListener('change', renderList);
+document.getElementById('f-tier').addEventListener('change', renderList);
+document.getElementById('f-escalated').addEventListener('change', renderList);
+
+init();
+</script>
+</body>
+</html>
