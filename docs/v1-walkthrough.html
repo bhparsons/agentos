@@ -30,6 +30,7 @@ tailwind.config = {
   .screen.active { display: block; }
   .screen.visible { opacity: 1; transform: translateX(0); }
   .screen.exit-left { opacity: 0; transform: translateX(-20px); }
+  .screen.exit-right { opacity: 0; transform: translateX(20px); }
   .nav-item { transition: all 150ms ease; }
   .nav-item:hover { background: rgba(124, 58, 237, 0.08); }
   .nav-item.active { background: #EDE9FE; color: #7C3AED; border-left: 3px solid #7C3AED; }
@@ -393,7 +394,7 @@ tailwind.config = {
           </div>
 
           <!-- Right: Original comparison -->
-          <div class="w-52 shrink-0">
+          <div class="w-64 shrink-0">
             <div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Original (v2.3)</div>
             <div class="bg-white rounded-lg border overflow-hidden">
               <div class="bg-red-50 border-b px-3 py-1.5 flex items-center justify-between"><span class="text-[10px] font-semibold text-red-700">Production</span><span class="inline-flex items-center rounded-full bg-red-100 text-red-700 px-1.5 py-0.5 text-[9px] font-medium">Escalated</span></div>
@@ -415,20 +416,34 @@ tailwind.config = {
         <div class="bg-white rounded-lg border p-4">
           <div class="flex items-center justify-between mb-3">
             <div><div class="text-sm font-semibold">Batch Simulation: 15 historical conversations</div><div class="text-xs text-gray-400">Replayed against v2.4-draft</div></div>
-            <span class="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 text-xs font-medium">14/15 passed (93%)</span>
+            <span class="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 text-xs font-medium">14/15 passed all evals</span>
           </div>
-          <div class="grid grid-cols-4 gap-3 mb-4">
-            <div class="bg-gray-50 rounded-lg p-3 text-center"><div class="text-lg font-bold text-emerald-600">4.3</div><div class="text-[10px] text-gray-500">Avg score (was 2.2)</div></div>
-            <div class="bg-gray-50 rounded-lg p-3 text-center"><div class="text-lg font-bold text-emerald-600">+12</div><div class="text-[10px] text-gray-500">Containments/day</div></div>
-            <div class="bg-gray-50 rounded-lg p-3 text-center"><div class="text-lg font-bold text-emerald-600">+0.6</div><div class="text-[10px] text-gray-500">CSAT change</div></div>
-            <div class="bg-gray-50 rounded-lg p-3 text-center"><div class="text-lg font-bold text-emerald-600">+3.6pp</div><div class="text-[10px] text-gray-500">Containment lift</div></div>
+          <!-- Evals applied -->
+          <div class="bg-gray-50 rounded-lg p-3 mb-4">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Evals Applied (3)</span>
+              <a class="text-[10px] text-decagon hover:underline cursor-pointer">View in Watchtower &rarr;</a>
+            </div>
+            <div class="flex gap-2">
+              <span class="inline-flex items-center rounded bg-white border px-2 py-0.5 text-[10px] text-gray-600">Resolution accuracy</span>
+              <span class="inline-flex items-center rounded bg-white border px-2 py-0.5 text-[10px] text-gray-600">Policy compliance</span>
+              <span class="inline-flex items-center rounded bg-white border px-2 py-0.5 text-[10px] text-gray-600">Tone &amp; empathy</span>
+            </div>
           </div>
+          <!-- Projected impact -->
+          <div class="grid grid-cols-3 gap-3 mb-4">
+            <div class="bg-gray-50 rounded-lg p-3 text-center"><div class="text-lg font-bold text-emerald-600">+12</div><div class="text-[10px] text-gray-500">Projected containments/day</div></div>
+            <div class="bg-gray-50 rounded-lg p-3 text-center"><div class="text-lg font-bold text-emerald-600">+0.6</div><div class="text-[10px] text-gray-500">Projected CSAT change</div></div>
+            <div class="bg-gray-50 rounded-lg p-3 text-center"><div class="text-lg font-bold text-emerald-600">+3.6pp</div><div class="text-[10px] text-gray-500">Projected containment lift</div></div>
+          </div>
+          <!-- Individual results with binary pass/fail -->
           <div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Individual Results</div>
-          <div class="space-y-1 max-h-40 overflow-auto">
-            <div class="flex items-center gap-3 px-2 py-1 rounded hover:bg-gray-50"><span class="w-2 h-2 rounded-full bg-emerald-500"></span><span class="text-xs font-mono w-20">CONV-4892</span><span class="text-xs flex-1">$750 billing dispute</span><span class="text-xs font-semibold text-emerald-600">4.5/5</span><span class="text-[10px] text-emerald-600">Resolved</span></div>
-            <div class="flex items-center gap-3 px-2 py-1 rounded hover:bg-gray-50"><span class="w-2 h-2 rounded-full bg-emerald-500"></span><span class="text-xs font-mono w-20">CONV-4901</span><span class="text-xs flex-1">$520 missing item</span><span class="text-xs font-semibold text-emerald-600">4.2/5</span><span class="text-[10px] text-emerald-600">Resolved</span></div>
-            <div class="flex items-center gap-3 px-2 py-1 rounded hover:bg-gray-50"><span class="w-2 h-2 rounded-full bg-emerald-500"></span><span class="text-xs font-mono w-20">CONV-5012</span><span class="text-xs flex-1">$1,200 dispute</span><span class="text-xs font-semibold text-emerald-600">4.1/5</span><span class="text-[10px] text-emerald-600">Esc. (correct)</span></div>
-            <div class="flex items-center gap-3 px-2 py-1 rounded hover:bg-gray-50 bg-amber-50"><span class="w-2 h-2 rounded-full bg-amber-500"></span><span class="text-xs font-mono w-20">CONV-5089</span><span class="text-xs flex-1">$3,200 fraud flag</span><span class="text-xs font-semibold text-amber-600">3.1/5</span><span class="text-[10px] text-amber-600">Partial</span></div>
+          <div class="space-y-1 max-h-44 overflow-auto">
+            <div class="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-gray-50"><span class="w-2 h-2 rounded-full bg-emerald-500"></span><span class="text-xs font-mono w-20">CONV-4892</span><span class="text-xs flex-1">$750 billing dispute</span><span class="text-xs font-medium text-emerald-600">3/3 passed</span><span class="text-[10px] text-emerald-600">Resolved</span></div>
+            <div class="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-gray-50"><span class="w-2 h-2 rounded-full bg-emerald-500"></span><span class="text-xs font-mono w-20">CONV-4901</span><span class="text-xs flex-1">$520 missing item</span><span class="text-xs font-medium text-emerald-600">3/3 passed</span><span class="text-[10px] text-emerald-600">Resolved</span></div>
+            <div class="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-gray-50"><span class="w-2 h-2 rounded-full bg-emerald-500"></span><span class="text-xs font-mono w-20">CONV-5012</span><span class="text-xs flex-1">$1,200 dispute</span><span class="text-xs font-medium text-emerald-600">3/3 passed</span><span class="text-[10px] text-emerald-600">Esc. (correct)</span></div>
+            <div class="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-gray-50"><span class="w-2 h-2 rounded-full bg-emerald-500"></span><span class="text-xs font-mono w-20">CONV-5034</span><span class="text-xs flex-1">$680 overcharge</span><span class="text-xs font-medium text-emerald-600">3/3 passed</span><span class="text-[10px] text-emerald-600">Resolved</span></div>
+            <div class="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-gray-50 bg-amber-50"><span class="w-2 h-2 rounded-full bg-amber-500"></span><span class="text-xs font-mono w-20">CONV-5089</span><span class="text-xs flex-1">$3,200 fraud flag</span><span class="text-xs font-medium text-amber-600">2/3 passed</span><span class="text-[10px] text-amber-600">Failed: Resolution accuracy</span></div>
           </div>
         </div>
       </div>
@@ -454,7 +469,7 @@ tailwind.config = {
             </div>
             <hr class="border-gray-100">
             <div>
-              <h2 class="text-sm font-bold font-heading uppercase tracking-wide text-gray-400 mb-2">Knowledge Being Added</h2>
+              <h2 class="text-sm font-bold font-heading uppercase tracking-wide text-gray-400 mb-2">Knowledge Changes (Summary)</h2>
               <div class="bg-gray-50 rounded-lg p-3 text-sm">
                 <div class="font-semibold mb-1">New KB Article: "Billing Dispute Resolution: Orders Over $500"</div>
                 <p class="text-gray-600 text-xs">3-tier resolution: Tier 1 ($500&ndash;$1K) full refund + 15% goodwill; Tier 2 ($1K&ndash;$2.5K) agent up to $1K, supervisor above; Tier 3 ($2.5K+) escalate with $500 credit, 48hr SLA.</p>
@@ -466,6 +481,11 @@ tailwind.config = {
                 <span class="inline-flex items-center rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 text-[10px]">CX Lead: $1K agent limit</span>
                 <span class="inline-flex items-center rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 text-[10px]">Q1 Dispute SOP.pdf</span>
               </div>
+            </div>
+            <hr class="border-gray-100">
+            <div>
+              <h2 class="text-sm font-bold font-heading uppercase tracking-wide text-gray-400 mb-2">Tools &amp; Capabilities Added</h2>
+              <p class="text-sm text-gray-400 italic">None required for this change. No new integrations or API access needed.</p>
             </div>
             <hr class="border-gray-100">
             <div>
@@ -671,9 +691,20 @@ function updateNavButtons(){
 }
 function goToStep(t){
   if(t===currentStep)return;
+  const fwd=t>currentStep;
   const c=document.getElementById(STEPS[currentStep].id),n=document.getElementById(STEPS[t].id);
-  c.classList.remove('visible');c.classList.add(t>currentStep?'exit-left':'');
-  setTimeout(()=>{c.classList.remove('active','exit-left');currentStep=t;n.classList.add('active');document.getElementById('screen-container').scrollTop=0;requestAnimationFrame(()=>requestAnimationFrame(()=>{n.classList.add('visible');n.style.transform='';}));updateSidebar();updateBreadcrumb();renderLifecycleBar();updateNavButtons();},150);
+  c.classList.remove('visible');
+  c.classList.add(fwd?'exit-left':'exit-right');
+  setTimeout(()=>{
+    c.classList.remove('active','exit-left','exit-right');
+    n.style.transform=fwd?'translateX(20px)':'translateX(-20px)';
+    n.style.opacity='0';
+    n.classList.add('active');
+    currentStep=t;
+    document.getElementById('screen-container').scrollTop=0;
+    updateSidebar();updateBreadcrumb();renderLifecycleBar();updateNavButtons();
+    requestAnimationFrame(()=>{requestAnimationFrame(()=>{n.style.transform='';n.style.opacity='';n.classList.add('visible');});});
+  },150);
 }
 function nextStep(){goToStep(currentStep<STEPS.length-1?currentStep+1:0);}
 function prevStep(){if(currentStep>0)goToStep(currentStep-1);}
