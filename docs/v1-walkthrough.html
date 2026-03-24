@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentOS - Hillclimbing V1 Walkthrough</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        decagon: { DEFAULT: '#7C3AED', dark: '#4C1D95', light: '#EDE9FE', mid: '#A78BFA', 50: '#F5F3FF', 100: '#EDE9FE', 200: '#DDD6FE', 300: '#C4B5FD', 400: '#A78BFA', 500: '#8B5CF6', 600: '#7C3AED', 700: '#6D28D9', 800: '#5B21B6', 900: '#4C1D95' },
+      },
+      fontFamily: {
+        heading: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+        body: ['Inter', 'system-ui', 'sans-serif'],
+      },
+    }
+  }
+}
+</script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', system-ui, sans-serif; background: #F9FAFB; color: #1F2937; }
+  h1,h2,h3,h4,h5,h6 { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
+  .screen { display: none; opacity: 0; transform: translateX(20px); transition: opacity 300ms ease, transform 300ms ease; }
+  .screen.active { display: block; }
+  .screen.visible { opacity: 1; transform: translateX(0); }
+  .screen.exit-left { opacity: 0; transform: translateX(-20px); }
+  .nav-item { transition: all 150ms ease; }
+  .nav-item:hover { background: rgba(124, 58, 237, 0.08); }
+  .nav-item.active { background: #EDE9FE; color: #7C3AED; border-left: 3px solid #7C3AED; }
+  .nav-item.active svg { color: #7C3AED; }
+  @keyframes subtle-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(124,58,237,0.3); } 50% { box-shadow: 0 0 0 6px rgba(124,58,237,0); } }
+  .pulse { animation: subtle-pulse 2s infinite; }
+  .chat-user { background: #7C3AED; color: white; border-radius: 12px 12px 4px 12px; }
+  .chat-agent { background: #F3F4F6; color: #1F2937; border-radius: 12px 12px 12px 4px; }
+  .chat-agent-good { background: #ECFDF5; color: #065F46; border-radius: 12px 12px 12px 4px; }
+  .chat-tool { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; font-family: 'SF Mono', 'Fira Code', monospace; }
+  ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }
+  .queue-row { transition: all 150ms ease; cursor: pointer; }
+  .queue-row:hover { background: #F5F3FF; }
+  .queue-row.selected { background: #EDE9FE; border-left: 3px solid #7C3AED; }
+  input[type="range"] { -webkit-appearance: none; height: 6px; background: #DDD6FE; border-radius: 3px; outline: none; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; background: #7C3AED; border-radius: 50%; cursor: pointer; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+  .lifecycle-step { cursor: pointer; transition: all 150ms ease; }
+  .lifecycle-step:hover .lc-label { color: #7C3AED !important; }
+  .greyed-out { opacity: 0.4; pointer-events: none; position: relative; overflow: hidden; }
+  .greyed-out::after { content: 'Future'; position: absolute; top: 4px; right: 4px; font-size: 9px; background: #D1D5DB; color: white; padding: 1px 5px; border-radius: 8px; z-index: 1; }
+  /* Sidebar collapse */
+  #sidebar { transition: width 200ms ease; }
+  #sidebar.collapsed { width: 48px; }
+  #sidebar.collapsed .nav-label, #sidebar.collapsed .sidebar-title, #sidebar.collapsed .group-label, #sidebar.collapsed .sidebar-footer-text { display: none; }
+  #sidebar.collapsed .nav-item { justify-content: center; padding-left: 0; padding-right: 0; }
+  #sidebar.collapsed .sidebar-header { justify-content: center; padding: 12px 8px; }
+  #sidebar.collapsed .sidebar-header > div:last-child { display: none; }
+  /* Segmented control */
+  .seg-control { display: inline-flex; background: #F3F4F6; border-radius: 8px; padding: 2px; }
+  .seg-btn { padding: 4px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 150ms; border: none; background: transparent; color: #6B7280; }
+  .seg-btn.active { background: #7C3AED; color: white; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+  .seg-btn:not(.active):hover { color: #374151; }
+  /* Editable case fields */
+  .case-input { background: transparent; border: 1px solid transparent; border-radius: 4px; padding: 1px 4px; font-size: 11px; text-align: right; width: 80px; transition: border-color 150ms; }
+  .case-input:hover { border-color: #D1D5DB; }
+  .case-input:focus { border-color: #7C3AED; outline: none; background: white; }
+</style>
+</head>
+<body class="h-screen overflow-hidden flex">
+
+<!-- SIDEBAR -->
+<aside id="sidebar" class="w-60 bg-white border-r border-gray-200 flex flex-col h-screen shrink-0">
+  <div class="sidebar-header border-b px-4 py-3 flex items-center gap-2">
+    <div class="w-8 h-8 rounded-lg bg-decagon flex items-center justify-center shrink-0 cursor-pointer" onclick="toggleSidebar()">
+      <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5"/></svg>
+    </div>
+    <div class="flex flex-col">
+      <span class="sidebar-title text-sm font-semibold font-heading">AgentOS</span>
+      <span class="sidebar-title text-[10px] text-gray-400">Enterprise AI Platform</span>
+    </div>
+  </div>
+  <nav class="flex-1 overflow-y-auto py-2">
+    <div class="px-3 mb-1"><span class="group-label text-[10px] font-semibold uppercase tracking-wider text-gray-400">Operations</span></div>
+    <div class="space-y-0.5 px-2 mb-3">
+      <div class="nav-item flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-gray-600" data-nav="dashboard"><svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg><span class="nav-label">Dashboard</span></div>
+      <div class="nav-item flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-gray-600" data-nav="conversations"><svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg><span class="nav-label">Conversations</span></div>
+      <div class="nav-item flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-gray-600" data-nav="queue"><svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg><span class="nav-label">Impact Queue</span></div>
+      <div class="nav-item flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-gray-600" data-nav="watchtower"><svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg><span class="nav-label">Watchtower</span></div>
+    </div>
+    <div class="px-3 mb-1"><span class="group-label text-[10px] font-semibold uppercase tracking-wider text-gray-400">Agent Definition</span></div>
+    <div class="space-y-0.5 px-2 mb-3">
+      <div class="nav-item flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-gray-600" data-nav="identity"><svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg><span class="nav-label">Identity</span></div>
+      <div class="nav-item flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-gray-600" data-nav="builder"><svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg><span class="nav-label">Agent Builder</span></div>
+      <div class="nav-item flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-gray-600" data-nav="rules"><svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg><span class="nav-label">Rules</span></div>
+      <div class="nav-item flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-gray-600" data-nav="knowledge"><svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg><span class="nav-label">Knowledge Base</span></div>
+    </div>
+    <div class="px-3 mb-1"><span class="group-label text-[10px] font-semibold uppercase tracking-wider text-gray-400">Insights</span></div>
+    <div class="space-y-0.5 px-2">
+      <div class="nav-item flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-gray-600" data-nav="suggestions"><svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg><span class="nav-label">Suggestions</span></div>
+      <div class="nav-item flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-gray-600" data-nav="experiments"><svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg><span class="nav-label">Experiments</span></div>
+      <div class="nav-item flex items-center gap-2 px-3 py-1.5 rounded-md text-sm text-gray-600" data-nav="testing"><svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg><span class="nav-label">Testing</span></div>
+    </div>
+  </nav>
+  <div class="border-t px-4 py-3"><span class="sidebar-footer-text text-[11px] text-gray-400">AgentOS v0.2.0 &middot; Demo</span></div>
+</aside>
+
+<!-- MAIN -->
+<div class="flex-1 flex flex-col h-screen overflow-hidden">
+  <header class="h-14 border-b bg-white px-6 flex items-center justify-between shrink-0">
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 text-sm">
+        <div class="w-6 h-6 rounded-full bg-decagon-100 flex items-center justify-center"><svg class="w-3 h-3 text-decagon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3"/></svg></div>
+        <span class="font-semibold font-heading">Acme Support Agent</span>
+        <span class="inline-flex items-center gap-1 rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-[10px] font-medium"><span class="w-1.5 h-1.5 rounded-full bg-green-500"></span> Active</span>
+      </div>
+      <span class="text-gray-300">|</span>
+      <span id="breadcrumb" class="text-sm text-gray-500"></span>
+    </div>
+    <div class="text-xs text-gray-400">V1 Walkthrough</div>
+  </header>
+  <div class="bg-white border-b px-6 py-2.5 shrink-0"><div class="flex items-center gap-1" id="lifecycle-bar"></div></div>
+
+  <main class="flex-1 overflow-auto p-6" id="screen-container">
+
+    <!-- SCREEN 1: IMPACT QUEUE -->
+    <div class="screen" id="screen-0">
+      <div class="mb-5">
+        <h1 class="text-xl font-bold font-heading">Impact Queue</h1>
+        <p class="text-sm text-gray-500 mt-1">Prioritized improvement opportunities ranked by volume</p>
+      </div>
+
+      <!-- Metrics bar — tinted, non-interactive -->
+      <div class="bg-decagon-50/60 rounded-lg px-5 py-3 flex items-center gap-8 mb-5">
+        <div><div class="text-xl font-bold font-heading text-decagon">+8.4pp</div><div class="text-[10px] text-gray-500">Projected containment lift</div></div>
+        <div class="w-px h-8 bg-decagon-200"></div>
+        <div><div class="text-xl font-bold font-heading">626<span class="text-sm font-normal text-gray-400 ml-1">/wk</span></div><div class="text-[10px] text-gray-500">Convos affected (38% of volume)</div></div>
+        <div class="w-px h-8 bg-decagon-200"></div>
+        <div><div class="text-xl font-bold font-heading text-emerald-600">+0.6</div><div class="text-[10px] text-gray-500">Projected CSAT improvement</div></div>
+      </div>
+
+      <!-- Table with integrated filters -->
+      <div class="bg-white rounded-lg border shadow-sm">
+        <div class="grid grid-cols-[1fr_110px_70px_80px_90px_80px_80px] gap-3 px-4 py-2 border-b items-center">
+          <span class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Pattern</span>
+          <select id="filter-stage" onchange="filterQueue()" class="text-[10px] font-semibold uppercase tracking-wider text-gray-400 bg-transparent border-0 outline-none cursor-pointer hover:text-decagon"><option value="">Stage &#9662;</option><option value="Stage 2">Stage 2</option><option value="Stage 3">Stage 3</option></select>
+          <span class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Vol.</span>
+          <span class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Impact</span>
+          <select id="filter-fixtype" onchange="filterQueue()" class="text-[10px] font-semibold uppercase tracking-wider text-gray-400 bg-transparent border-0 outline-none cursor-pointer hover:text-decagon"><option value="">Fix Type &#9662;</option><option value="KB Article">KB Article</option><option value="AOP Edit">AOP Edit</option></select>
+          <select id="filter-owner" onchange="filterQueue()" class="text-[10px] font-semibold uppercase tracking-wider text-gray-400 bg-transparent border-0 outline-none cursor-pointer hover:text-decagon"><option value="">Owner &#9662;</option><option value="CX Team">CX Team</option><option value="Engineering">Engineering</option></select>
+          <select id="filter-status" onchange="filterQueue()" class="text-[10px] font-semibold uppercase tracking-wider text-gray-400 bg-transparent border-0 outline-none cursor-pointer hover:text-decagon"><option value="">Status &#9662;</option><option value="Identified">Identified</option><option value="Fix in Progress">In Prog.</option><option value="Validating">Validating</option><option value="Shipped">Shipped</option></select>
+        </div>
+        <div class="queue-row selected grid grid-cols-[1fr_110px_70px_80px_90px_80px_80px] gap-3 px-4 py-2.5 border-b items-center" onclick="goToStep(1)" data-fixtype="KB Article" data-owner="CX Team" data-stage="Stage 3" data-status="Identified">
+          <div><div class="text-sm font-medium">Billing disputes over $500 have no agent guidance</div><div class="text-[10px] text-gray-400 mt-0.5">No refund policy for orders &gt;$500</div></div>
+          <span class="text-[10px] text-gray-500">Stage 3: Resolve</span>
+          <span class="text-sm font-semibold">238/wk</span>
+          <span class="text-sm font-semibold text-emerald-600">+3.6pp</span>
+          <span class="text-[10px] text-gray-500">KB Article</span>
+          <span class="text-[10px] text-gray-500">CX Team</span>
+          <span class="inline-flex items-center rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 text-[9px] font-medium">Identified</span>
+        </div>
+        <div class="queue-row grid grid-cols-[1fr_110px_70px_80px_90px_80px_80px] gap-3 px-4 py-2.5 border-b items-center" data-fixtype="KB Article" data-owner="CX Team" data-stage="Stage 3" data-status="Identified">
+          <div><div class="text-sm font-medium">Refund policy edge cases causing repeat contacts</div><div class="text-[10px] text-gray-400 mt-0.5">Partial refund scenarios not covered</div></div>
+          <span class="text-[10px] text-gray-500">Stage 3: Resolve</span><span class="text-sm font-semibold">127/wk</span><span class="text-sm font-semibold text-emerald-600">+1.9pp</span><span class="text-[10px] text-gray-500">KB Article</span><span class="text-[10px] text-gray-500">CX Team</span><span class="inline-flex items-center rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 text-[9px] font-medium">Identified</span>
+        </div>
+        <div class="queue-row grid grid-cols-[1fr_110px_70px_80px_90px_80px_80px] gap-3 px-4 py-2.5 border-b items-center" data-fixtype="AOP Edit" data-owner="CX Team" data-stage="Stage 2" data-status="Fix in Progress">
+          <div><div class="text-sm font-medium">Subscription change misclassified as cancellation</div><div class="text-[10px] text-gray-400 mt-0.5">AOP routes "change plan" as "cancel"</div></div>
+          <span class="text-[10px] text-gray-500">Stage 2: Triage</span><span class="text-sm font-semibold">94/wk</span><span class="text-sm font-semibold text-emerald-600">+1.4pp</span><span class="text-[10px] text-gray-500">AOP Edit</span><span class="text-[10px] text-gray-500">CX Team</span><span class="inline-flex items-center rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[9px] font-medium">In Prog.</span>
+        </div>
+        <div class="queue-row grid grid-cols-[1fr_110px_70px_80px_90px_80px_80px] gap-3 px-4 py-2.5 border-b items-center" data-fixtype="AOP Edit" data-owner="Engineering" data-stage="Stage 3" data-status="Validating">
+          <div><div class="text-sm font-medium">Account lockout flow missing 2FA recovery</div><div class="text-[10px] text-gray-400 mt-0.5">No AOP branch for 2FA lockout</div></div>
+          <span class="text-[10px] text-gray-500">Stage 3: Resolve</span><span class="text-sm font-semibold">68/wk</span><span class="text-sm font-semibold text-emerald-600">+1.0pp</span><span class="text-[10px] text-gray-500">AOP Edit</span><span class="text-[10px] text-gray-500">Engineering</span><span class="inline-flex items-center rounded-full bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 text-[9px] font-medium">Validating</span>
+        </div>
+        <div class="queue-row grid grid-cols-[1fr_110px_70px_80px_90px_80px_80px] gap-3 px-4 py-2.5 border-b items-center" data-fixtype="KB Article" data-owner="CX Team" data-stage="Stage 3" data-status="Identified">
+          <div><div class="text-sm font-medium">Plan comparison questions inconsistent</div><div class="text-[10px] text-gray-400 mt-0.5">KB out of date with pricing tiers</div></div>
+          <span class="text-[10px] text-gray-500">Stage 3: Resolve</span><span class="text-sm font-semibold">56/wk</span><span class="text-sm font-semibold text-emerald-600">+0.5pp</span><span class="text-[10px] text-gray-500">KB Article</span><span class="text-[10px] text-gray-500">CX Team</span><span class="inline-flex items-center rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 text-[9px] font-medium">Identified</span>
+        </div>
+        <div class="queue-row grid grid-cols-[1fr_110px_70px_80px_90px_80px_80px] gap-3 px-4 py-2.5 items-center" data-fixtype="KB Article" data-owner="CX Team" data-stage="Stage 3" data-status="Shipped">
+          <div><div class="text-sm font-medium">API error explanations lack depth</div><div class="text-[10px] text-gray-400 mt-0.5">Developer errors need more detail</div></div>
+          <span class="text-[10px] text-gray-500">Stage 3: Resolve</span><span class="text-sm font-semibold">43/wk</span><span class="text-sm text-gray-400">+1.2pp</span><span class="text-[10px] text-gray-500">KB Article</span><span class="text-[10px] text-gray-500">CX Team</span><span class="inline-flex items-center rounded-full bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 text-[9px] font-medium">Shipped</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 2: INVESTIGATE -->
+    <div class="screen" id="screen-1">
+      <div class="max-w-3xl">
+        <div class="mb-4">
+          <div class="flex items-center gap-2 text-xs text-gray-400 mb-2"><span class="cursor-pointer hover:text-decagon" onclick="goToStep(0)">Impact Queue</span><span>/</span><span class="text-gray-600">IQ-001</span></div>
+          <h1 class="text-xl font-bold font-heading">Billing disputes over $500 have no agent guidance</h1>
+          <div class="flex items-center gap-1.5 mt-2 flex-wrap">
+            <span class="inline-flex items-center rounded-full bg-gray-100 text-gray-600 px-2 py-0.5 text-[10px] font-medium">Identified</span>
+            <span class="inline-flex items-center rounded-full bg-gray-100 text-gray-600 px-2 py-0.5 text-[10px] font-medium">KB Article</span>
+            <span class="inline-flex items-center rounded-full bg-gray-100 text-gray-600 px-2 py-0.5 text-[10px] font-medium">Stage 3: Resolve</span>
+            <span class="inline-flex items-center rounded-full bg-gray-100 text-gray-600 px-2 py-0.5 text-[10px] font-medium">CX Team</span>
+          </div>
+        </div>
+
+        <!-- Pattern -->
+        <div class="rounded-lg border border-violet-200 bg-violet-50 p-3 flex gap-2 mb-3">
+          <svg class="w-4 h-4 shrink-0 mt-0.5 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <div>
+            <div class="text-[10px] font-semibold uppercase tracking-wide text-violet-600 mb-0.5">Pattern</div>
+            <p class="text-sm font-medium">34 escalations/day on billing disputes &mdash; agent has no guidance for orders over $500. Stage 3 KB gap.</p>
+          </div>
+        </div>
+
+        <!-- Suggested Fix with merged KPIs + diagnosis -->
+        <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 mb-4">
+          <div class="flex gap-2 mb-3">
+            <svg class="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+            <div>
+              <div class="text-[10px] font-semibold uppercase tracking-wide text-emerald-600 mb-0.5">Suggested Fix</div>
+              <p class="text-sm font-medium">Publish KB article with billing dispute resolution policy for orders over $500, including escalation thresholds and refund authorization guidelines.</p>
+              <div class="text-[10px] text-emerald-700 mt-1">Diagnosis: <span class="font-semibold">KB Gap</span></div>
+            </div>
+          </div>
+          <div class="flex gap-4 pt-2 border-t border-emerald-200">
+            <div class="text-center flex-1"><div class="text-lg font-bold">238</div><div class="text-[10px] text-emerald-700">convos/week</div></div>
+            <div class="text-center flex-1"><div class="text-lg font-bold text-red-500">-0.9</div><div class="text-[10px] text-emerald-700">CSAT impact</div></div>
+            <div class="text-center flex-1"><div class="text-lg font-bold text-emerald-600">+3.6pp</div><div class="text-[10px] text-emerald-700">projected lift</div></div>
+          </div>
+        </div>
+
+        <!-- Example Conversations -->
+        <div class="mb-4">
+          <h3 class="text-sm font-semibold mb-2">Example Conversations</h3>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="bg-white rounded-lg border p-3">
+              <div class="flex items-center gap-2 mb-2"><span class="text-[10px] font-mono text-gray-400">CONV-4892</span><span class="inline-flex items-center rounded-full bg-red-50 text-red-600 px-1.5 py-0.5 text-[9px] font-medium">Escalated</span></div>
+              <div class="space-y-2">
+                <div class="flex justify-end"><div class="chat-user px-3 py-1.5 text-xs max-w-[85%]">I need to dispute a charge of $750.</div></div>
+                <div class="flex justify-start"><div class="chat-agent px-3 py-1.5 text-xs max-w-[85%]">I can't process disputes for this amount. Transferring you.</div></div>
+              </div>
+            </div>
+            <div class="bg-white rounded-lg border p-3">
+              <div class="flex items-center gap-2 mb-2"><span class="text-[10px] font-mono text-gray-400">CONV-4901</span><span class="inline-flex items-center rounded-full bg-red-50 text-red-600 px-1.5 py-0.5 text-[9px] font-medium">Escalated</span></div>
+              <div class="space-y-2">
+                <div class="flex justify-end"><div class="chat-user px-3 py-1.5 text-xs max-w-[85%]">I was charged $520 and item never arrived.</div></div>
+                <div class="flex justify-start"><div class="chat-agent px-3 py-1.5 text-xs max-w-[85%]">Let me transfer you to our billing team.</div></div>
+              </div>
+            </div>
+          </div>
+          <button class="text-xs text-decagon hover:underline mt-2">View 12 more conversations &rarr;</button>
+        </div>
+
+        <div class="flex gap-2">
+          <button onclick="goToStep(2)" class="inline-flex items-center gap-2 bg-decagon hover:bg-decagon-700 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors">Start Fix</button>
+          <button class="inline-flex items-center gap-2 border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors">View in Workbench</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 3: DRAFT FIX (multi-step) -->
+    <div class="screen" id="screen-2">
+      <div class="flex items-center gap-2 text-xs text-gray-400 mb-3">
+        <span class="cursor-pointer hover:text-decagon" onclick="goToStep(0)">Impact Queue</span><span>/</span>
+        <span class="cursor-pointer hover:text-decagon" onclick="goToStep(1)">IQ-001</span><span>/</span><span class="text-gray-600">Draft Fix</span>
+      </div>
+      <div class="flex items-center justify-between mb-4">
+        <h1 class="text-xl font-bold font-heading">Draft Fix</h1>
+        <div class="seg-control">
+          <button class="seg-btn active" onclick="switchDraftStep('inputs')">1. Inputs</button>
+          <button class="seg-btn" onclick="switchDraftStep('draft')">2. Generated Draft</button>
+        </div>
+      </div>
+
+      <!-- Step 1: Inputs -->
+      <div id="draft-inputs">
+        <p class="text-sm text-gray-500 mb-4">Provide inputs to ground the generated policy. The system synthesizes available sources and flags gaps.</p>
+        <div class="max-w-2xl space-y-3">
+          <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+            <div class="flex items-center gap-2 mb-1"><svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg><span class="text-xs font-semibold text-emerald-700">Client Business Policies Found</span></div>
+            <p class="text-xs text-emerald-800 ml-5">Matched "Refund Authorization Limits" (max $500 for Tier 1 agents) and "Customer Retention Guidelines" (goodwill gestures). Extracted authorization tiers and escalation thresholds.</p>
+          </div>
+          <div class="rounded-lg border border-blue-200 bg-blue-50 p-3">
+            <div class="flex items-center gap-2 mb-1"><svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg><span class="text-xs font-semibold text-blue-700">User Input</span><button class="ml-auto text-[10px] text-blue-600 hover:underline">+ Add document</button></div>
+            <p class="text-xs text-blue-800 ml-5">CX lead confirmed: agents can authorize up to $1,000. Uploaded "Q1 Dispute SOP.pdf" with 48-hour SLA for Tier 3.</p>
+          </div>
+          <div class="greyed-out rounded-lg border p-3">
+            <div class="flex items-center gap-2 mb-1"><svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg><span class="text-xs font-semibold text-gray-500">Industry Best Practices</span></div>
+            <p class="text-xs text-gray-400 ml-5">Research comparable policies from industry benchmarks</p>
+          </div>
+          <div class="greyed-out rounded-lg border p-3">
+            <div class="flex items-center gap-2 mb-1"><svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg><span class="text-xs font-semibold text-gray-500">Observed Human Agent Behavior</span></div>
+            <p class="text-xs text-gray-400 ml-5">Learn from human agent resolution patterns</p>
+          </div>
+        </div>
+        <button onclick="switchDraftStep('draft')" class="mt-4 inline-flex items-center gap-2 bg-decagon hover:bg-decagon-700 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors">Generate Draft</button>
+      </div>
+
+      <!-- Step 2: Draft -->
+      <div id="draft-editor" style="display:none;">
+        <div class="flex gap-5">
+          <div class="flex-1">
+            <div class="bg-white rounded-lg border shadow-sm">
+              <div class="border-b px-4 py-2 flex items-center gap-1">
+                <button class="p-1.5 rounded hover:bg-gray-100 text-gray-500"><b class="text-sm">B</b></button>
+                <button class="p-1.5 rounded hover:bg-gray-100 text-gray-500"><i class="text-sm">I</i></button>
+                <span class="w-px h-4 bg-gray-200 mx-1"></span>
+                <button class="p-1.5 rounded hover:bg-gray-100 text-gray-500 text-xs">H1</button>
+                <button class="p-1.5 rounded hover:bg-gray-100 text-gray-500 text-xs">H2</button>
+                <div class="ml-auto text-[10px] text-gray-400"><span class="inline-flex items-center rounded bg-decagon-50 text-decagon px-1.5 py-0.5 font-medium">v2.4-draft</span></div>
+              </div>
+              <div class="px-6 pt-3"><input type="text" value="Billing Dispute Resolution: Orders Over $500" class="w-full text-lg font-bold font-heading border-0 outline-none bg-transparent" readonly></div>
+              <div class="px-6 py-3 text-sm leading-relaxed space-y-3">
+                <div><h3 class="text-base font-semibold font-heading mb-1">Policy Overview</h3><p class="text-gray-600">For billing disputes over $500, agents follow the tiered approach below. <span class="bg-yellow-100 text-yellow-800 text-[10px] px-1 rounded">Based on: Refund Auth Limits + CX lead input</span></p></div>
+                <div><h3 class="text-base font-semibold font-heading mb-1">Resolution Tiers</h3>
+                  <div class="ml-1 space-y-2">
+                    <div><h4 class="text-sm font-semibold text-decagon-700">Tier 1: $500&ndash;$1,000</h4><ul class="list-disc ml-5 text-gray-600 text-sm space-y-0.5 mt-1"><li>Full refund authorized <span class="bg-yellow-100 text-yellow-800 text-[10px] px-1 rounded">per CX lead</span></li><li>15% goodwill discount <span class="bg-yellow-100 text-yellow-800 text-[10px] px-1 rounded">per Retention Guidelines</span></li><li>3&ndash;5 business day timeline</li></ul></div>
+                    <div><h4 class="text-sm font-semibold text-decagon-700">Tier 2: $1,000&ndash;$2,500</h4><ul class="list-disc ml-5 text-gray-600 text-sm space-y-0.5 mt-1"><li>Agent refund up to $1,000; supervisor above</li></ul></div>
+                    <div><h4 class="text-sm font-semibold text-decagon-700">Tier 3: Over $2,500</h4><ul class="list-disc ml-5 text-gray-600 text-sm space-y-0.5 mt-1"><li>Escalate with $500 interim credit</li><li>48hr SLA <span class="bg-yellow-100 text-yellow-800 text-[10px] px-1 rounded">per Q1 Dispute SOP</span></li></ul></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="w-56 shrink-0 space-y-3">
+            <div class="bg-white rounded-lg border p-3"><div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Status</div><span class="inline-flex items-center rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 text-[10px] font-medium">Draft</span></div>
+            <div class="bg-white rounded-lg border p-3"><div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Agent Version</div><div class="text-sm font-mono">v2.4-draft</div><div class="text-[10px] text-gray-400">from v2.3 (prod)</div></div>
+            <div class="bg-white rounded-lg border p-3">
+              <div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Projected Resolution</div>
+              <div class="flex items-center gap-2"><div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden"><div class="h-full bg-decagon rounded-full" style="width:87%"></div></div><span class="text-sm font-semibold">87%</span></div>
+              <div class="text-[10px] text-gray-400 mt-1">13% = chargeback/fraud &rarr; escalate</div>
+            </div>
+            <div class="bg-white rounded-lg border p-3"><div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">Sample Queries</div><div class="space-y-1"><div class="text-[10px] text-gray-600 bg-gray-50 rounded px-2 py-0.5">"Dispute $750 charge"</div><div class="text-[10px] text-gray-600 bg-gray-50 rounded px-2 py-0.5">"Refund for order &gt;$500"</div></div></div>
+          </div>
+        </div>
+        <div class="flex gap-2 mt-4">
+          <button class="inline-flex items-center gap-2 border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium">Save Draft</button>
+          <button onclick="goToStep(3)" class="inline-flex items-center gap-2 bg-decagon hover:bg-decagon-700 text-white px-5 py-2 rounded-lg text-sm font-semibold">Test in Playground</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 4: TEST -->
+    <div class="screen" id="screen-3">
+      <div class="flex items-center gap-2 text-xs text-gray-400 mb-3">
+        <span class="cursor-pointer hover:text-decagon" onclick="goToStep(0)">Impact Queue</span><span>/</span><span class="cursor-pointer hover:text-decagon" onclick="goToStep(1)">IQ-001</span><span>/</span><span class="text-gray-600">Test</span>
+      </div>
+      <div class="flex items-center justify-between mb-4">
+        <div><h1 class="text-xl font-bold font-heading">Test Changes</h1><p class="text-sm text-gray-500">Agent <span class="font-mono text-decagon">v2.4-draft</span> vs. production v2.3</p></div>
+        <div class="seg-control"><button class="seg-btn active" onclick="switchTestTab('playground')">Playground</button><button class="seg-btn" onclick="switchTestTab('simulations')">Simulations</button></div>
+      </div>
+
+      <!-- PLAYGROUND -->
+      <div id="test-playground">
+        <div class="flex gap-4">
+          <!-- Left: Case selection -->
+          <div class="w-52 shrink-0">
+            <div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Test Case</div>
+            <div class="space-y-1 mb-3">
+              <div class="bg-white rounded-lg border-2 border-decagon p-2 cursor-pointer"><div class="text-xs font-medium">CONV-4892</div><div class="text-[10px] text-gray-400">$750 dispute</div></div>
+              <div class="bg-white rounded-lg border p-2 cursor-pointer hover:bg-gray-50"><div class="text-xs font-medium text-gray-600">CONV-4901</div><div class="text-[10px] text-gray-400">$520 charge</div></div>
+              <div class="bg-white rounded-lg border p-2 cursor-pointer hover:bg-gray-50"><div class="text-xs font-medium text-gray-600">CONV-5012</div><div class="text-[10px] text-gray-400">$1,200 dispute</div></div>
+            </div>
+            <div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Case Details</div>
+            <div class="bg-white rounded-lg border p-2 space-y-1 text-[10px]">
+              <div class="flex justify-between items-center"><span class="text-gray-400">Order</span><input class="case-input font-mono" value="#ORD-4892"></div>
+              <div class="flex justify-between items-center"><span class="text-gray-400">Amount</span><input class="case-input" value="$750.00"></div>
+              <div class="flex justify-between items-center"><span class="text-gray-400">Customer</span><input class="case-input" value="Sarah M."></div>
+              <div class="flex justify-between items-center"><span class="text-gray-400">Acct Age</span><input class="case-input" value="2.3 years"></div>
+              <div class="flex justify-between items-center"><span class="text-gray-400">Prior Disputes</span><input class="case-input" value="0"></div>
+            </div>
+          </div>
+
+          <!-- Middle: Playground chat -->
+          <div class="flex-1 flex flex-col">
+            <div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Agent Playground (v2.4-draft)</div>
+            <div class="bg-white rounded-lg border overflow-hidden flex flex-col flex-1" style="max-height:440px;">
+              <div class="bg-decagon-50 border-b px-4 py-1.5 flex items-center justify-between">
+                <span class="text-xs font-semibold text-decagon">Live Chat</span>
+                <span class="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 text-[9px] font-medium">Resolved</span>
+              </div>
+              <div class="flex-1 p-3 space-y-2 overflow-auto">
+                <div class="flex justify-end"><div class="chat-user px-3 py-1.5 text-xs max-w-[80%]">Hi, I need to dispute a charge of $750. Order #ORD-4892.</div></div>
+                <div class="flex justify-start"><div class="chat-agent-good px-3 py-1.5 text-xs max-w-[80%]">I'm sorry about this billing issue. I can see order #ORD-4892 for $750. For orders $500&ndash;$1,000, I'm authorized to process a full refund. Shall I initiate that?</div></div>
+                <div class="flex justify-end"><div class="chat-user px-3 py-1.5 text-xs max-w-[80%]">Yes please!</div></div>
+                <!-- Tool call -->
+                <div class="flex justify-start"><div class="chat-tool px-3 py-1.5 text-[10px] max-w-[85%]"><div class="text-gray-400 mb-0.5">Tool: process_refund</div><div class="text-gray-600">{order: "ORD-4892", amount: "$750.00", status: "success", refund_id: "RF-7821"}</div></div></div>
+                <div class="flex justify-start"><div class="chat-agent-good px-3 py-1.5 text-xs max-w-[80%]">Done! Refund of $750 initiated (RF-7821). You'll see it in 3&ndash;5 days. I've also applied a 15% discount for your next order.</div></div>
+                <div class="flex justify-end"><div class="chat-user px-3 py-1.5 text-xs max-w-[80%]">Great, thanks!</div></div>
+              </div>
+              <div class="border-t px-3 py-1.5 flex items-center justify-between bg-emerald-50/50">
+                <span class="text-[9px] text-emerald-600 font-medium">Passed Stage 3: Resolve</span><span class="text-xs font-bold text-emerald-600">4.5/5</span>
+              </div>
+              <div class="border-t px-3 py-1.5 flex gap-2">
+                <input type="text" placeholder="Type a message..." class="flex-1 text-xs border rounded-lg px-3 py-1 outline-none focus:ring-1 focus:ring-decagon">
+                <button class="bg-decagon text-white px-3 py-1 rounded-lg text-xs font-medium">Send</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Original comparison -->
+          <div class="w-52 shrink-0">
+            <div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Original (v2.3)</div>
+            <div class="bg-white rounded-lg border overflow-hidden">
+              <div class="bg-red-50 border-b px-3 py-1.5 flex items-center justify-between"><span class="text-[10px] font-semibold text-red-700">Production</span><span class="inline-flex items-center rounded-full bg-red-100 text-red-700 px-1.5 py-0.5 text-[9px] font-medium">Escalated</span></div>
+              <div class="p-3 space-y-2 max-h-40 overflow-auto">
+                <div class="flex justify-end"><div class="chat-user px-2 py-1 text-[10px] max-w-[90%]">Dispute $750 charge</div></div>
+                <div class="flex justify-start"><div class="chat-agent px-2 py-1 text-[10px] max-w-[90%]">Can't process this. Transferring...</div></div>
+              </div>
+              <div class="border-t px-3 py-1.5 flex items-center justify-between bg-red-50/50"><span class="text-[9px] text-red-600">Failed Stage 3</span><span class="text-xs font-bold text-red-600">2.1/5</span></div>
+            </div>
+            <div class="mt-3 bg-emerald-50 rounded-lg border border-emerald-200 p-2 text-center">
+              <div class="text-lg font-bold text-emerald-600">+2.4</div><div class="text-[10px] text-emerald-600">score improvement</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SIMULATIONS -->
+      <div id="test-simulations" style="display:none;">
+        <div class="bg-white rounded-lg border p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div><div class="text-sm font-semibold">Batch Simulation: 15 historical conversations</div><div class="text-xs text-gray-400">Replayed against v2.4-draft</div></div>
+            <span class="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 text-xs font-medium">14/15 passed (93%)</span>
+          </div>
+          <div class="grid grid-cols-4 gap-3 mb-4">
+            <div class="bg-gray-50 rounded-lg p-3 text-center"><div class="text-lg font-bold text-emerald-600">4.3</div><div class="text-[10px] text-gray-500">Avg score (was 2.2)</div></div>
+            <div class="bg-gray-50 rounded-lg p-3 text-center"><div class="text-lg font-bold text-emerald-600">+12</div><div class="text-[10px] text-gray-500">Containments/day</div></div>
+            <div class="bg-gray-50 rounded-lg p-3 text-center"><div class="text-lg font-bold text-emerald-600">+0.6</div><div class="text-[10px] text-gray-500">CSAT change</div></div>
+            <div class="bg-gray-50 rounded-lg p-3 text-center"><div class="text-lg font-bold text-emerald-600">+3.6pp</div><div class="text-[10px] text-gray-500">Containment lift</div></div>
+          </div>
+          <div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Individual Results</div>
+          <div class="space-y-1 max-h-40 overflow-auto">
+            <div class="flex items-center gap-3 px-2 py-1 rounded hover:bg-gray-50"><span class="w-2 h-2 rounded-full bg-emerald-500"></span><span class="text-xs font-mono w-20">CONV-4892</span><span class="text-xs flex-1">$750 billing dispute</span><span class="text-xs font-semibold text-emerald-600">4.5/5</span><span class="text-[10px] text-emerald-600">Resolved</span></div>
+            <div class="flex items-center gap-3 px-2 py-1 rounded hover:bg-gray-50"><span class="w-2 h-2 rounded-full bg-emerald-500"></span><span class="text-xs font-mono w-20">CONV-4901</span><span class="text-xs flex-1">$520 missing item</span><span class="text-xs font-semibold text-emerald-600">4.2/5</span><span class="text-[10px] text-emerald-600">Resolved</span></div>
+            <div class="flex items-center gap-3 px-2 py-1 rounded hover:bg-gray-50"><span class="w-2 h-2 rounded-full bg-emerald-500"></span><span class="text-xs font-mono w-20">CONV-5012</span><span class="text-xs flex-1">$1,200 dispute</span><span class="text-xs font-semibold text-emerald-600">4.1/5</span><span class="text-[10px] text-emerald-600">Esc. (correct)</span></div>
+            <div class="flex items-center gap-3 px-2 py-1 rounded hover:bg-gray-50 bg-amber-50"><span class="w-2 h-2 rounded-full bg-amber-500"></span><span class="text-xs font-mono w-20">CONV-5089</span><span class="text-xs flex-1">$3,200 fraud flag</span><span class="text-xs font-semibold text-amber-600">3.1/5</span><span class="text-[10px] text-amber-600">Partial</span></div>
+          </div>
+        </div>
+      </div>
+      <button onclick="goToStep(4)" class="mt-4 inline-flex items-center gap-2 bg-decagon hover:bg-decagon-700 text-white px-5 py-2 rounded-lg text-sm font-semibold">Create Approval Report</button>
+    </div>
+
+    <!-- SCREEN 5: APPROVE -->
+    <div class="screen" id="screen-4">
+      <div class="max-w-3xl mx-auto">
+        <div class="bg-white rounded-lg border shadow-sm overflow-hidden">
+          <div class="bg-gradient-to-r from-decagon-dark to-decagon px-6 py-4 text-white">
+            <div class="flex items-center justify-between">
+              <div><h1 class="text-lg font-bold font-heading">Change Approval Report</h1><p class="text-white/70 text-xs">IQ-001 &middot; March 20, 2026</p></div>
+              <span class="inline-flex items-center rounded-full bg-amber-400/20 text-amber-100 border border-amber-400/30 px-3 py-1 text-xs font-medium">Pending Approval</span>
+            </div>
+          </div>
+          <div class="p-6 space-y-5">
+            <div>
+              <h2 class="text-sm font-bold font-heading uppercase tracking-wide text-gray-400 mb-2">Issue</h2>
+              <p class="text-sm">34 escalations/day on billing disputes &mdash; agent has no guidance for orders over $500. All high-value disputes escalate immediately regardless of complexity.</p>
+              <div class="mt-2 text-sm"><span class="text-gray-500">Volume:</span> <span class="font-medium">238 conversations/week</span></div>
+              <div class="text-sm"><span class="text-gray-500">Current CSAT:</span> <span class="font-medium">4.1</span> <span class="text-gray-400 text-xs">(vs. 4.3 overall avg)</span></div>
+            </div>
+            <hr class="border-gray-100">
+            <div>
+              <h2 class="text-sm font-bold font-heading uppercase tracking-wide text-gray-400 mb-2">Knowledge Being Added</h2>
+              <div class="bg-gray-50 rounded-lg p-3 text-sm">
+                <div class="font-semibold mb-1">New KB Article: "Billing Dispute Resolution: Orders Over $500"</div>
+                <p class="text-gray-600 text-xs">3-tier resolution: Tier 1 ($500&ndash;$1K) full refund + 15% goodwill; Tier 2 ($1K&ndash;$2.5K) agent up to $1K, supervisor above; Tier 3 ($2.5K+) escalate with $500 credit, 48hr SLA.</p>
+                <button class="text-xs text-decagon hover:underline mt-1">View full article &rarr;</button>
+              </div>
+              <div class="mt-2 flex flex-wrap gap-1">
+                <span class="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[10px]">Refund Auth Limits (client policy)</span>
+                <span class="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[10px]">Retention Guidelines (client policy)</span>
+                <span class="inline-flex items-center rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 text-[10px]">CX Lead: $1K agent limit</span>
+                <span class="inline-flex items-center rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 text-[10px]">Q1 Dispute SOP.pdf</span>
+              </div>
+            </div>
+            <hr class="border-gray-100">
+            <div>
+              <h2 class="text-sm font-bold font-heading uppercase tracking-wide text-gray-400 mb-2">Simulation Results</h2>
+              <div class="grid grid-cols-3 gap-3">
+                <div class="bg-emerald-50 rounded-lg p-3 text-center"><div class="text-xs text-emerald-600 mb-0.5">Score</div><div class="text-lg font-bold text-emerald-700">2.1 &rarr; 4.5</div></div>
+                <div class="bg-emerald-50 rounded-lg p-3 text-center"><div class="text-xs text-emerald-600 mb-0.5">Impact</div><div class="text-lg font-bold text-emerald-700">+3.6pp</div></div>
+                <div class="bg-emerald-50 rounded-lg p-3 text-center"><div class="text-xs text-emerald-600 mb-0.5">Coverage</div><div class="text-lg font-bold text-emerald-700">93%</div></div>
+              </div>
+            </div>
+            <hr class="border-gray-100">
+            <div>
+              <h2 class="text-sm font-bold font-heading uppercase tracking-wide text-gray-400 mb-2">Experiment Config</h2>
+              <div class="bg-gray-50 rounded-lg p-3 space-y-1.5 text-sm">
+                <div class="flex justify-between"><span class="text-gray-500">Traffic</span><span class="font-medium">10% &rarr; 25% &rarr; 50% &rarr; 100%</span></div>
+                <div class="flex justify-between"><span class="text-gray-500">Duration</span><span class="font-medium">7 days/stage</span></div>
+                <div class="flex justify-between"><span class="text-gray-500">Auto-rollback</span><span class="font-medium">CSAT &lt; 3.8</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="border-t px-6 py-3 flex gap-2 bg-gray-50">
+            <button onclick="goToStep(5)" class="inline-flex items-center gap-2 bg-decagon hover:bg-decagon-700 text-white px-5 py-2 rounded-lg text-sm font-semibold">Approve &amp; Create Experiment</button>
+            <button class="border border-gray-300 hover:bg-white text-gray-700 px-4 py-2 rounded-lg text-sm font-medium">Request Changes</button>
+            <button class="border border-gray-300 hover:bg-white text-gray-700 px-4 py-2 rounded-lg text-sm font-medium">Export PDF</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 6: EXPERIMENT -->
+    <div class="screen" id="screen-5">
+      <div class="flex gap-6">
+        <div class="w-64 shrink-0">
+          <h2 class="text-sm font-semibold font-heading mb-3">Experiments</h2>
+          <div class="space-y-1">
+            <div class="bg-white rounded-lg border-2 border-decagon p-3 cursor-pointer"><div class="flex items-center justify-between mb-0.5"><span class="text-sm font-medium">Billing Dispute KB</span><span class="inline-flex items-center rounded-full bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 text-[9px] font-medium">Active</span></div><div class="text-[10px] text-gray-400">10% &middot; Day 1 of 7</div></div>
+            <div class="bg-white rounded-lg border p-3 cursor-pointer hover:bg-gray-50"><div class="flex items-center justify-between"><span class="text-sm font-medium text-gray-500">Billing AOP v2</span><span class="text-[9px] text-gray-400">Draft</span></div></div>
+            <div class="bg-white rounded-lg border p-3 cursor-pointer hover:bg-gray-50"><div class="flex items-center justify-between"><span class="text-sm font-medium text-gray-500">Refund Flow Opt.</span><span class="text-[9px] text-green-600">Done</span></div></div>
+          </div>
+        </div>
+        <div class="flex-1">
+          <div class="flex items-center gap-3 mb-3">
+            <h1 class="text-xl font-bold font-heading">Billing Dispute KB &mdash; 10% Ramp</h1>
+            <span class="inline-flex items-center gap-1 rounded-full bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 text-xs font-medium"><span class="w-1.5 h-1.5 rounded-full bg-green-500"></span> Active</span>
+          </div>
+
+          <!-- Traffic ramp with timeline -->
+          <div class="bg-white rounded-lg border p-4 mb-3">
+            <div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Traffic Ramp</div>
+            <div class="flex items-center gap-1 mb-2">
+              <div class="flex items-center gap-1 flex-1"><div class="rounded-full px-3 py-1 text-xs font-semibold bg-decagon text-white text-center w-full">10%</div><div class="h-0.5 w-3 bg-gray-200"></div></div>
+              <div class="flex items-center gap-1 flex-1"><div class="rounded-full px-3 py-1 text-xs font-medium bg-gray-100 text-gray-400 text-center w-full">25%</div><div class="h-0.5 w-3 bg-gray-200"></div></div>
+              <div class="flex items-center gap-1 flex-1"><div class="rounded-full px-3 py-1 text-xs font-medium bg-gray-100 text-gray-400 text-center w-full">50%</div><div class="h-0.5 w-3 bg-gray-200"></div></div>
+              <div class="flex-1"><div class="rounded-full px-3 py-1 text-xs font-medium bg-gray-100 text-gray-400 text-center w-full">100%</div></div>
+            </div>
+            <div class="flex items-center gap-1 text-[9px] text-gray-400 mb-3">
+              <div class="flex-1 text-center">Mar 20&ndash;27</div>
+              <div class="flex-1 text-center">Mar 27&ndash;Apr 3</div>
+              <div class="flex-1 text-center">Apr 3&ndash;10</div>
+              <div class="flex-1 text-center">Apr 10+</div>
+            </div>
+            <div class="flex items-center gap-3">
+              <input type="range" min="0" max="100" value="10" class="flex-1" oninput="document.getElementById('tv').textContent=this.value+'%'">
+              <span id="tv" class="text-sm font-semibold text-decagon w-10 text-right">10%</span>
+            </div>
+          </div>
+
+          <!-- Early results + projected comparison -->
+          <div class="grid grid-cols-2 gap-3 mb-3">
+            <div class="bg-white rounded-lg border p-3">
+              <div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Early Results</div>
+              <div class="space-y-1.5 opacity-50">
+                <div class="flex justify-between text-sm"><span class="text-gray-500">Containment</span><span class="font-semibold">64.2% <span class="text-emerald-600 text-xs">&uarr;</span></span></div>
+                <div class="flex justify-between text-sm"><span class="text-gray-500">CSAT</span><span class="font-semibold">4.2</span></div>
+              </div>
+              <div class="mt-2 text-[9px] text-amber-600 bg-amber-50 rounded px-2 py-1">Not yet stat. sig. (Day 1/7, n=42)</div>
+            </div>
+            <div class="bg-decagon-50 rounded-lg border border-decagon-200 p-3">
+              <div class="text-[10px] font-semibold uppercase tracking-wide text-decagon mb-2">Projected Impact</div>
+              <div class="space-y-1.5">
+                <div class="flex justify-between text-sm"><span class="text-gray-600">Containment</span><span class="font-semibold text-decagon">+3.6pp</span></div>
+                <div class="flex justify-between text-sm"><span class="text-gray-600">Containments/day</span><span class="font-semibold text-decagon">+12</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Guardrails -->
+          <div class="bg-white rounded-lg border p-3 mb-3">
+            <div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Guardrails</div>
+            <div class="grid grid-cols-3 gap-2">
+              <div class="rounded border border-green-200 bg-green-50 p-2 text-center"><div class="text-sm font-bold text-green-700">4.2</div><div class="text-[9px] text-gray-400">CSAT (&gt;3.8)</div></div>
+              <div class="rounded border border-green-200 bg-green-50 p-2 text-center"><div class="text-sm font-bold text-green-700">12.3%</div><div class="text-[9px] text-gray-400">Esc. Rate (&lt;+5%)</div></div>
+              <div class="rounded border border-green-200 bg-green-50 p-2 text-center"><div class="text-sm font-bold text-green-700">4.1/5</div><div class="text-[9px] text-gray-400">Quality (&gt;3.5)</div></div>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <button class="border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium">Pause</button>
+            <button class="border border-red-200 hover:bg-red-50 text-red-600 px-4 py-2 rounded-lg text-sm font-medium">Roll Back</button>
+            <button onclick="goToStep(6)" class="bg-decagon hover:bg-decagon-700 text-white px-5 py-2 rounded-lg text-sm font-semibold">View Attribution</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 7: ATTRIBUTION -->
+    <div class="screen" id="screen-6">
+      <div class="flex items-center justify-between mb-4">
+        <div><h1 class="text-xl font-bold font-heading">Attribution Timeline</h1><p class="text-sm text-gray-500">Feb 24 &ndash; Mar 23, 2026</p></div>
+        <div class="seg-control"><button class="seg-btn active">Deflection</button><button class="seg-btn">CSAT</button><button class="seg-btn">Response Time</button></div>
+      </div>
+      <div class="bg-white rounded-lg border p-4 mb-4">
+        <svg viewBox="0 0 800 280" class="w-full" style="max-height:300px;">
+          <line x1="50" y1="20" x2="50" y2="240" stroke="#E5E7EB" stroke-width="1"/><line x1="50" y1="240" x2="770" y2="240" stroke="#E5E7EB" stroke-width="1"/>
+          <line x1="50" y1="60" x2="770" y2="60" stroke="#F3F4F6" stroke-width="1" stroke-dasharray="4"/><line x1="50" y1="100" x2="770" y2="100" stroke="#F3F4F6" stroke-width="1" stroke-dasharray="4"/><line x1="50" y1="140" x2="770" y2="140" stroke="#F3F4F6" stroke-width="1" stroke-dasharray="4"/><line x1="50" y1="180" x2="770" y2="180" stroke="#F3F4F6" stroke-width="1" stroke-dasharray="4"/><line x1="50" y1="220" x2="770" y2="220" stroke="#F3F4F6" stroke-width="1" stroke-dasharray="4"/>
+          <text x="40" y="64" text-anchor="end" fill="#9CA3AF" font-size="10" font-family="Inter">70%</text><text x="40" y="104" text-anchor="end" fill="#9CA3AF" font-size="10" font-family="Inter">65%</text><text x="40" y="144" text-anchor="end" fill="#9CA3AF" font-size="10" font-family="Inter">60%</text><text x="40" y="184" text-anchor="end" fill="#9CA3AF" font-size="10" font-family="Inter">55%</text><text x="40" y="224" text-anchor="end" fill="#9CA3AF" font-size="10" font-family="Inter">50%</text>
+          <text x="100" y="258" text-anchor="middle" fill="#9CA3AF" font-size="10">Feb 24</text><text x="230" y="258" text-anchor="middle" fill="#9CA3AF" font-size="10">Mar 3</text><text x="360" y="258" text-anchor="middle" fill="#9CA3AF" font-size="10">Mar 10</text><text x="490" y="258" text-anchor="middle" fill="#9CA3AF" font-size="10">Mar 17</text><text x="620" y="258" text-anchor="middle" fill="#9CA3AF" font-size="10">Mar 20</text><text x="740" y="258" text-anchor="middle" fill="#9CA3AF" font-size="10">Mar 23</text>
+          <!-- Experiment phase shaded band -->
+          <rect x="610" y="20" width="140" height="220" fill="#7C3AED" opacity="0.04" rx="2"/>
+          <text x="680" y="235" text-anchor="middle" fill="#A78BFA" font-size="8" font-family="Inter">Experiment (10%)</text>
+          <!-- Target line -->
+          <line x1="50" y1="100" x2="770" y2="100" stroke="#10B981" stroke-width="1.5" stroke-dasharray="6 3"/><text x="775" y="104" fill="#10B981" font-size="9" font-weight="600">Target 65%</text>
+          <!-- Main line with step changes -->
+          <polyline points="100,180 150,182 200,179 250,176 300,178 350,175 400,170 448,166 452,162 490,158 530,148 570,138 608,132 612,125 650,122 690,118 740,112" fill="none" stroke="#7C3AED" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <polygon points="100,180 150,182 200,179 250,176 300,178 350,175 400,170 448,166 452,162 490,158 530,148 570,138 608,132 612,125 650,122 690,118 740,112 740,240 100,240" fill="url(#pg)" opacity="0.12"/>
+          <defs><linearGradient id="pg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7C3AED"/><stop offset="100%" stop-color="#7C3AED" stop-opacity="0"/></linearGradient></defs>
+          <!-- Annotations -->
+          <line x1="450" y1="162" x2="450" y2="240" stroke="#7C3AED" stroke-width="1" stroke-dasharray="3"/><circle cx="450" cy="162" r="4" fill="#7C3AED" stroke="white" stroke-width="2"/>
+          <rect x="385" y="30" width="130" height="22" rx="4" fill="white" stroke="#DDD6FE"/><text x="450" y="43" text-anchor="middle" fill="#4C1D95" font-size="9" font-weight="600">API Error KB Published</text>
+          <line x1="612" y1="125" x2="612" y2="240" stroke="#7C3AED" stroke-width="1" stroke-dasharray="3"/><circle cx="612" cy="125" r="4" fill="#7C3AED" stroke="white" stroke-width="2"/>
+          <rect x="540" y="30" width="145" height="22" rx="4" fill="white" stroke="#DDD6FE"/><text x="612" y="43" text-anchor="middle" fill="#4C1D95" font-size="9" font-weight="600">Billing Dispute KB (10%)</text>
+          <rect x="700" y="96" width="50" height="22" rx="4" fill="#7C3AED"/><text x="725" y="111" text-anchor="middle" fill="white" font-size="11" font-weight="700">63.1%</text>
+        </svg>
+      </div>
+      <div class="grid grid-cols-2 gap-4 mb-4">
+        <div class="bg-white rounded-lg border p-3">
+          <div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Before (Wk 1&ndash;2)</div>
+          <div class="space-y-1.5"><div class="flex justify-between text-sm"><span class="text-gray-500">Containment</span><span class="font-semibold">55.2%</span></div><div class="flex justify-between text-sm"><span class="text-gray-500">CSAT</span><span class="font-semibold">4.1</span></div><div class="flex justify-between text-sm"><span class="text-gray-500">Billing Esc.</span><span class="font-semibold">34/day</span></div></div>
+        </div>
+        <div class="bg-white rounded-lg border p-3">
+          <div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">After (Wk 3&ndash;4)</div>
+          <div class="space-y-1.5"><div class="flex justify-between text-sm"><span class="text-gray-500">Containment</span><span class="font-semibold text-emerald-600">63.1% <span class="text-xs">(+7.9pp)</span></span></div><div class="flex justify-between text-sm"><span class="text-gray-500">CSAT</span><span class="font-semibold text-emerald-600">4.3 <span class="text-xs">(+0.2)</span></span></div><div class="flex justify-between text-sm"><span class="text-gray-500">Billing Esc.</span><span class="font-semibold text-emerald-600">22/day <span class="text-xs">(-12)</span></span></div></div>
+        </div>
+      </div>
+      <div class="bg-white rounded-lg border p-3 mb-4">
+        <div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Shipped Changes</div>
+        <div class="space-y-1.5">
+          <div class="flex items-center gap-3"><div class="w-2 h-2 rounded-full bg-decagon"></div><span class="text-xs text-gray-400 w-14">Mar 14</span><span class="text-sm font-medium flex-1">API Error KB</span><span class="text-[10px] text-gray-500">KB Article</span><span class="text-sm font-semibold text-emerald-600">+1.2pp</span></div>
+          <div class="flex items-center gap-3"><div class="w-2 h-2 rounded-full bg-decagon"></div><span class="text-xs text-gray-400 w-14">Mar 20</span><span class="text-sm font-medium flex-1">Billing Dispute KB</span><span class="text-[10px] text-gray-500">KB Article</span><span class="text-sm font-semibold text-emerald-600">+5.8pp</span></div>
+          <div class="flex items-center gap-3"><div class="w-2 h-2 rounded-full bg-decagon/40"></div><span class="text-xs text-gray-400 w-14">Mar 22</span><span class="text-sm font-medium flex-1 text-gray-500">Billing AOP v2</span><span class="text-[10px] text-gray-500">AOP Edit</span><span class="text-xs text-gray-400 italic">monitoring...</span></div>
+        </div>
+      </div>
+      <div class="bg-decagon-50 rounded-lg border border-decagon-200 p-3 flex items-center justify-between">
+        <div><div class="text-sm font-medium">Queue: <span class="text-decagon">4 shipped</span>, <span class="text-amber-600">2 in progress</span>, <span class="text-gray-500">3 identified</span></div><div class="text-xs text-gray-500">Next: Subscription misclassification (28/day)</div></div>
+        <button onclick="goToStep(0)" class="bg-decagon hover:bg-decagon-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">Return to Queue</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- NAV -->
+<div class="fixed bottom-6 right-6 flex items-center gap-2 bg-white rounded-xl shadow-lg border px-3 py-2 z-50">
+  <button id="btn-prev" onclick="prevStep()" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg> Back
+  </button>
+  <span class="text-xs text-gray-400 px-2" id="step-counter">1 of 7</span>
+  <button id="btn-next" onclick="nextStep()" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-semibold bg-decagon text-white hover:bg-decagon/90 pulse">
+    Next <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+  </button>
+</div>
+
+<script>
+const STEPS = [
+  { id:'screen-0', nav:'queue', breadcrumb:'Impact Queue', lifecycle:0 },
+  { id:'screen-1', nav:'queue', breadcrumb:'Impact Queue / IQ-001', lifecycle:1 },
+  { id:'screen-2', nav:'knowledge', breadcrumb:'Knowledge Base / Draft Fix', lifecycle:2 },
+  { id:'screen-3', nav:'testing', breadcrumb:'Testing / Playground', lifecycle:3 },
+  { id:'screen-4', nav:'queue', breadcrumb:'Impact Queue / Approve', lifecycle:4 },
+  { id:'screen-5', nav:'experiments', breadcrumb:'Experiments / Ship', lifecycle:5 },
+  { id:'screen-6', nav:'dashboard', breadcrumb:'Dashboard / Attribution', lifecycle:6 },
+];
+const LC = ['Identify','Investigate','Draft','Test','Approve','Ship','Monitor'];
+let currentStep = 0;
+
+function renderLifecycleBar() {
+  const bar = document.getElementById('lifecycle-bar');
+  const ai = STEPS[currentStep].lifecycle;
+  bar.innerHTML = LC.map((l,i) => {
+    const a = i===ai, d = i<ai;
+    const dc = a?'bg-decagon':d?'bg-decagon/40':'bg-gray-200';
+    const tc = a?'text-decagon font-semibold':d?'text-decagon/60':'text-gray-400';
+    const c = i<LC.length-1?`<div class="h-0.5 flex-1 ${d?'bg-decagon/30':'bg-gray-200'}"></div>`:'';
+    return `<div class="lifecycle-step flex items-center gap-1.5 ${i<LC.length-1?'flex-1':''}" onclick="goToStep(${i})"><div class="flex items-center gap-1.5 shrink-0"><div class="w-2.5 h-2.5 rounded-full ${dc} ${a?'ring-2 ring-decagon/30':''}"></div><span class="text-[11px] lc-label ${tc} whitespace-nowrap">${l}</span></div>${c}</div>`;
+  }).join('');
+}
+function updateSidebar(){document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active'));const e=document.querySelector(`.nav-item[data-nav="${STEPS[currentStep].nav}"]`);if(e)e.classList.add('active');}
+function updateBreadcrumb(){document.getElementById('breadcrumb').textContent=STEPS[currentStep].breadcrumb;}
+function updateNavButtons(){
+  document.getElementById('btn-prev').disabled=currentStep===0;
+  const b=document.getElementById('btn-next');
+  b.innerHTML=currentStep===STEPS.length-1?'Restart <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>':'Next <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>';
+  document.getElementById('step-counter').textContent=`${currentStep+1} of ${STEPS.length}`;
+}
+function goToStep(t){
+  if(t===currentStep)return;
+  const c=document.getElementById(STEPS[currentStep].id),n=document.getElementById(STEPS[t].id);
+  c.classList.remove('visible');c.classList.add(t>currentStep?'exit-left':'');
+  setTimeout(()=>{c.classList.remove('active','exit-left');currentStep=t;n.classList.add('active');document.getElementById('screen-container').scrollTop=0;requestAnimationFrame(()=>requestAnimationFrame(()=>{n.classList.add('visible');n.style.transform='';}));updateSidebar();updateBreadcrumb();renderLifecycleBar();updateNavButtons();},150);
+}
+function nextStep(){goToStep(currentStep<STEPS.length-1?currentStep+1:0);}
+function prevStep(){if(currentStep>0)goToStep(currentStep-1);}
+document.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key===' '){e.preventDefault();nextStep();}if(e.key==='ArrowLeft'){e.preventDefault();prevStep();}});
+
+// Sidebar collapse
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('collapsed');}
+
+// Queue filtering
+function filterQueue(){
+  const ft=document.getElementById('filter-fixtype').value,ow=document.getElementById('filter-owner').value,st=document.getElementById('filter-stage').value,ss=document.getElementById('filter-status').value;
+  document.querySelectorAll('.queue-row').forEach(r=>{r.style.display=(!ft||r.dataset.fixtype===ft)&&(!ow||r.dataset.owner===ow)&&(!st||r.dataset.stage.includes(st))&&(!ss||r.dataset.status===ss)?'':'none';});
+}
+
+// Draft steps
+function switchDraftStep(step){
+  document.getElementById('draft-inputs').style.display=step==='inputs'?'':'none';
+  document.getElementById('draft-editor').style.display=step==='draft'?'':'none';
+  document.querySelectorAll('#screen-2 .seg-btn').forEach((b,i)=>b.classList.toggle('active',i===(step==='inputs'?0:1)));
+}
+
+// Test tabs
+function switchTestTab(tab){
+  document.getElementById('test-playground').style.display=tab==='playground'?'':'none';
+  document.getElementById('test-simulations').style.display=tab==='simulations'?'':'none';
+  document.querySelectorAll('#screen-3 .seg-btn').forEach((b,i)=>b.classList.toggle('active',i===(tab==='playground'?0:1)));
+}
+
+// Init
+document.addEventListener('DOMContentLoaded',()=>{const f=document.getElementById(STEPS[0].id);f.classList.add('active');requestAnimationFrame(()=>f.classList.add('visible'));updateSidebar();updateBreadcrumb();renderLifecycleBar();updateNavButtons();});
+</script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+%%{init: {'theme': 'base', 'themeVariables': {
+  'primaryColor': '#7C3AED', 'primaryTextColor': '#ffffff',
+  'primaryBorderColor': '#5B21B6', 'lineColor': '#94a3b8',
+  'secondaryColor': '#10b981', 'tertiaryColor': '#f59e0b',
+  'background': '#ffffff', 'mainBkg': '#f8fafc',
+  'nodeBorder': '#cbd5e1', 'clusterBkg': '#f1f5f9',
+  'clusterBorder': '#e2e8f0', 'titleColor': '#1e293b',
+  'edgeLabelBackground': '#ffffff', 'textColor': '#334155'
+}}}%%
+flowchart TD
+    entry([1,000 conversations]):::entryNode
+
+    stage1["1. Connect & Context\n1,000 in"]:::stage1
+    stage2["2. Triage\n950 in"]:::stage2
+    stage3["3. Resolve\n800 in"]:::stage3
+    stage4["4. Close\n620 in"]:::stage4
+
+    resolved(["580 Fully Resolved\n58% deflection rate"]):::successNode
+
+    exit1["Abandon / Disengage\n50 · CX fix"]:::cxFix
+    exit2a["Misclassified\n80 · CX fix"]:::cxFix
+    exit2b["Missing Context\n45 · Eng fix"]:::engFix
+    exit2c["Request Human\n25 · Escalation"]:::escalation
+    exit3a["KB Gap / Hallucination\n90 · CX fix"]:::cxFix
+    exit3b["Can't Execute Action\n55 · Eng fix"]:::engFix
+    exit3c["Resolution Rejected\n35 · CX fix"]:::cxFix
+    exit4["False Deflection\n40 · Eng fix"]:::engFix
+
+    entry --> stage1
+    stage1 -- "95% pass" --> stage2
+    stage1 -. "-50" .-> exit1
+    stage2 -- "84% pass" --> stage3
+    stage2 -. "-80" .-> exit2a
+    stage2 -. "-45" .-> exit2b
+    stage2 -. "-25" .-> exit2c
+    stage3 -- "78% pass" --> stage4
+    stage3 -. "-90" .-> exit3a
+    stage3 -. "-55" .-> exit3b
+    stage3 -. "-35" .-> exit3c
+    stage4 -- "94% pass" --> resolved
+    stage4 -. "-40" .-> exit4
+
+    classDef entryNode fill:#EDE9FE,stroke:#7C3AED,stroke-width:2px,color:#4C1D95
+    classDef stage1 fill:#7C3AED,stroke:#5B21B6,stroke-width:2px,color:#fff
+    classDef stage2 fill:#6D28D9,stroke:#5B21B6,stroke-width:2px,color:#fff
+    classDef stage3 fill:#5B21B6,stroke:#4C1D95,stroke-width:2px,color:#fff
+    classDef stage4 fill:#4C1D95,stroke:#3B0764,stroke-width:2px,color:#fff
+    classDef successNode fill:#ECFDF5,stroke:#10B981,stroke-width:2px,color:#059669
+    classDef cxFix fill:#FEF2F2,stroke:#F59E0B,stroke-width:1.5px,color:#92400E
+    classDef engFix fill:#FEF2F2,stroke:#EF4444,stroke-width:1.5px,color:#991B1B
+    classDef escalation fill:#F5F3FF,stroke:#8B5CF6,stroke-width:1.5px,color:#5B21B6

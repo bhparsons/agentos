@@ -1,7 +1,17 @@
 # Research, context, and docs (not code)
 context/
-docs/
 jds/
+
+# Docs — exclude working files, keep deliverables
+docs/archive/
+docs/assets/*.py
+docs/assets/*.html
+docs/assets/*.excalidraw
+docs/assets/attribution-timeline.png
+docs/assets/conversation-flow*.png
+docs/assets/conversation-flow*.svg
+docs/assets/conversation-flow-sankey.html
+docs/conversation-lifecycle.excalidraw
 
 # Data files
 data/
